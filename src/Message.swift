@@ -200,6 +200,8 @@ public enum DataflowException: ErrorType {
     case WriteOnceException
     case NotImplementedException
     case KeyNotFoundException(String)
+    case InvalidValueException
+    case OutOfRangeException
     
     static let MustOverride = "This function must be overridden"
 }
