@@ -24,7 +24,7 @@ extension String {
     }
     
     subscript (r: Range<Int>) -> String {
-        return substringWithRange(Range(start: startIndex.advancedBy(r.startIndex), end: startIndex.advancedBy(r.endIndex)))
+        return substringWithRange(startIndex.advancedBy(r.startIndex)..<startIndex.advancedBy(r.endIndex))
     }
     
     func AsBytes() -> [Byte] {
@@ -38,8 +38,9 @@ public typealias Byte = UInt8
 
 struct Unsafe {
 
-    static func toByteArray<T>(var value: T) -> [Byte] {
-        return withUnsafePointer(&value) {
+    static func toByteArray<T>(value: T) -> [Byte] {
+        var v = value
+        return withUnsafePointer(&v) {
             Array(UnsafeBufferPointer(start: UnsafePointer<Byte>($0), count: sizeof(T)))
         }
     }
@@ -50,28 +51,72 @@ struct Unsafe {
         }
     }
 
-    static func toInt64Bits<T>(var value: T) -> UInt64 {
-        return withUnsafePointer(&value) {
+    static func toInt64Bits<T>(value: T) -> UInt64 {
+        var v = value
+        return withUnsafePointer(&v) {
             return UnsafePointer<UInt64>($0).memory
         }
     }
 
-    static func fromInt64Bits<T>(var bits: UInt64, _: T.Type) -> T {
-        return withUnsafePointer(&bits) {
+    static func fromInt64Bits<T>(bits: UInt64, _: T.Type) -> T {
+        var v = bits
+        return withUnsafePointer(&v) {
             return UnsafePointer<T>($0).memory
         }
     }
     
-    static func toInt32Bits<T>(var value: T) -> UInt32 {
-        return withUnsafePointer(&value) {
+    static func toInt32Bits<T>(value: T) -> UInt32 {
+        var v = value
+        return withUnsafePointer(&v) {
             return UnsafePointer<UInt32>($0).memory
         }
     }
     
-    static func fromInt32Bits<T>(var bits: UInt32, _: T.Type) -> T {
-        return withUnsafePointer(&bits) {
+    static func fromInt32Bits<T>(bits: UInt32, _: T.Type) -> T {
+        var v = bits
+        return withUnsafePointer(&v) {
             return UnsafePointer<T>($0).memory
         }
+    }
+}
+
+public typealias BytePtr = UnsafeMutablePointer<Byte>
+public typealias ByteArrayPtr = UnsafeMutableBufferPointer<Byte>
+
+public class ByteArray {
+    private let _mem: BytePtr
+
+    let buf: ByteArrayPtr
+    let count: Int
+
+    public init(count: Int) {
+        self.count = count
+        _mem = BytePtr(malloc(self.count))
+        buf = ByteArrayPtr(start: _mem, count: self.count)
+    }
+    
+    public convenience init(value: ByteArray) {
+        self.init(count: value.count)
+        self.blockCopy(value, srcOffset: 0, dstOffset: 0, count: value.count)
+    }
+    
+    public subscript(index: Int) -> Byte {
+        get { return buf[index] }
+        set(b) { buf[index] = b }
+    }
+    
+    func blockCopy(src: ByteArray, srcOffset: Int, dstOffset: Int, count: Int) {
+        // TODO: make sure memcpy is safe to copy onto itself
+        memcpy(self.buf.baseAddress + dstOffset, src.buf.baseAddress + srcOffset, count)
+    }
+    
+    deinit {
+        free(_mem)
+    }
+    
+    public func toString() -> String {
+        let str = NSString(bytes: self.buf.baseAddress, length: self.count, encoding: NSUTF8StringEncoding)
+        return str! as String
     }
 }
 
@@ -101,4 +146,24 @@ public class ArrayRef<T> {
     func append(item: T) {
         self.value.append(item)
     }
+    
+    func blockCopy(srcOffset: Int, dst: ArrayRef<T>, dstOffset: Int, count: Int) {
+        dst.value[dstOffset..<(dstOffset+count)] = value[srcOffset..<(srcOffset+count)]
+    }
+    
+    func toString() -> String {
+        var str: NSString? = nil
+        value.withUnsafeBufferPointer {
+            str = NSString(bytes: $0.baseAddress, length: self.count, encoding: NSUTF8StringEncoding)
+        }
+        return str! as String
+    }
+}
+
+func blockCopy(src: ByteArrayPtr, srcOffset: Int, dst: ByteArrayPtr, dstOffset: Int, count: Int) {
+    memcpy(dst.baseAddress + dstOffset, src.baseAddress + srcOffset, count)
+}
+
+func blockCopy(src: UnsafePointer<Byte>, srcOffset: Int, dst: ByteArrayPtr, dstOffset: Int, count: Int) {
+    memcpy(dst.baseAddress + dstOffset, src + srcOffset, count)
 }

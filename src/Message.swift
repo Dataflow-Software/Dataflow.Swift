@@ -201,7 +201,9 @@ public enum DataflowException: ErrorType {
     case NotImplementedException
     case KeyNotFoundException(String)
     case InvalidValueException
+    case InvalidOperationException
     case OutOfRangeException
+    case StorageState
     
     static let MustOverride = "This function must be overridden"
 }
@@ -477,57 +479,78 @@ public class Pbs {
     }
     
     // Encode/decode helpers
-    public static func VarInt64Ex(db: ArrayRef<Byte>, inout pos: Int, var b0: UInt32) throws -> UInt64 {
+    public static func VarInt64Ex(db: ByteArray, inout pos: Int, b0: UInt32) throws -> UInt64 {
+        var b0 = b0
         var ul: UInt64 = 0
         var i = pos // MO: for some reason this is casted to UInt
         var b: UInt32 = UInt32(db[i])
         b0 = (b0 & 0x3FFF) | UInt32(b << 14)
         while b > 0x7F {
-            b0 = (b0 & UInt32(0x1FFFFF)) | UInt32(b = UInt32(db[++i]) << 21)
+            i = i + 1
+            b0 = (b0 & UInt32(0x1FFFFF)) | UInt32(b = UInt32(db[i]) << 21)
             if b < 0x80 { break }
             b0 &= 0xFFFFFFF
-            var b1: UInt32 = UInt32(db[++i]), b2: UInt32 = 0;
+            i = i + 1
+            var b1: UInt32 = UInt32(db[i]), b2: UInt32 = 0;
             while b1 > 0x7F {
-                b1 = (b1 & UInt32(0x7F)) | UInt32(b = UInt32(db[++i]) << 7)
+                i = i + 1
+                b1 = (b1 & UInt32(0x7F)) | UInt32(b = UInt32(db[i]) << 7)
                 if b < 0x80 { break }
-                b1 = (b1 & UInt32(0x3FFF)) | UInt32(b = UInt32(db[++i]) << 14)
+                i = i + 1
+                b1 = (b1 & UInt32(0x3FFF)) | UInt32(b = UInt32(db[i]) << 14)
                 if b < 0x80 { break }
-                b1 = (b1 & UInt32(0x1FFFFF)) | UInt32(b = UInt32(db[++i]) << 21)
+                i = i + 1
+                b1 = (b1 & UInt32(0x1FFFFF)) | UInt32(b = UInt32(db[i]) << 21)
                 if b < 0x80 { break }
                 b1 &= 0xFFFFFFF
-                b2 = UInt32(b = UInt32(db[++i]))
+                i = i + 1
+                b2 = UInt32(b = UInt32(db[i]))
                 if b < 0x80 { break }
-                b2 = (b2 & UInt32(0x7F)) | UInt32(b = UInt32(db[++i]) << 7)
-                if b > 127 { throw DataflowException.GenericException("varint value is too long") }
+                i = i + 1
+                b2 = (b2 & UInt32(0x7F)) | UInt32(b = UInt32(db[i]) << 7)
+                if b > 127 { throw DataflowException.SerializationException("varint value is too long") }
                 break;
             }
             ul = (UInt64(b1) << 28) | (UInt64(b2) << 56)
             break
         }
         
-        pos = ++i
+        i = i + 1
+        pos = i
         return ul | UInt64(b0)
     }
     
-    public static func VarInt64(db: ArrayRef<Byte>, inout pos: Int) throws -> UInt64 {
+    public static func VarInt64(db: ByteArray, inout pos: Int) throws -> UInt64 {
         var i = pos
-        var b0: UInt32 = UInt32(db[i++])
+        var b0: UInt32 = UInt32(db[i])
+        i = i + 1
         if b0 < 0x80 { return UInt64(b0) }
-        b0 = (b0 & UInt32(0x7F)) | (UInt32(db[i++]) << 7)
+        b0 = (b0 & UInt32(0x7F)) | (UInt32(db[i]) << 7)
+        i = i  + 1
         pos = i
         return (b0 < UInt32(0x4000) ? UInt64(b0) : try VarInt64Ex(db, pos: &pos, b0: b0))
     }
     
-    public static func PutString(inout db: [Byte], s: String, var i: Int) -> Int {
+    public static func PutString(inout db: ByteArray, s: String, i: Int) -> Int {
+        var i = i
         for c in s.utf16 {
-            if c < 0x80 { db[i++] = Byte(c) }
+            if c < 0x80 {
+                db[i] = Byte(c)
+                i = i + 1
+            }
             else {
-                if c < 0x800 { db[i++] = Byte(0xC0 | (c >> 6)) }
-                else {
-                    db[i++] = Byte(0xE0 | ((c >> 12) & 0x0F))
-                    db[i++] = Byte(0x80 | ((c >> 6) & 0x3F))
+                if c < 0x800 {
+                    db[i] = Byte(0xC0 | (c >> 6))
+                    i = i + 1
                 }
-                db[i++] = Byte(0x80 | (c & 0x3F))
+                else {
+                    db[i] = Byte(0xE0 | ((c >> 12) & 0x0F))
+                    i = i + 1
+                    db[i] = Byte(0x80 | ((c >> 6) & 0x3F))
+                    i = i + 1
+                }
+                db[i] = Byte(0x80 | (c & 0x3F))
+                i = i + 1
             }
         }
         
