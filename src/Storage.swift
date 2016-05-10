@@ -392,7 +392,68 @@ public class StorageReader {
 
 //-- Base class for message writers that produce byte streams.
 public class StorageWriter {
+    var _db: ByteArray?
+    var _cp: Int
+    var _bp, _epos: Int
+    var dts: DataStorage?
     
+    public init(ds: DataStorage, estimate: Int = 0) {
+        self.dts = ds
+        _cp = 0
+        _bp = 0
+        _epos = 0
+        _db = nil
+        Reset(ds, estimate: estimate)
+    }
+    
+    public init(db: ByteArray, pos: Int, count: Int) {
+        _db = db
+        _bp = pos
+        _cp = pos
+        _epos = pos + count
+        dts = nil
+    }
+    
+    convenience init(reserveSize: Int) {
+        self.init(db: ByteArray(count: reserveSize), pos: 0, count: reserveSize)
+    }
+    
+    func Reset(ds: DataStorage?, estimate: Int = 0) {
+        self.dts = ds
+        if let ds = ds {
+            SetSegment(ds.GetNextSegment(estimate))
+        }
+    }
+    
+    func SetSegment(ds: DataSegment) {
+        _bp = ds.Offset
+        _epos = _bp + ds.Size
+        _bp = _bp + ds.Count
+        _cp = _bp
+        _db = ds.Buffer
+    }
+    
+    public func Flush() throws {
+        if let dts = dts {
+            if _cp == _bp  { return }
+            try dts.Commit(_cp - _bp, extend: 0);
+            _bp = _cp;
+        }
+    }
+    
+    func Flush(xp: Int, sz: Int) throws -> Int {
+        return xp + sz <= _epos ? xp : try FlushEx(xp, extraSz: sz);
+    }
+    
+    func FlushEx(endPos: Int, extraSz: Int) throws -> Int {
+        if let dts = dts {
+            try SetSegment(dts.Commit(endPos - _bp, extend: extraSz))
+            return _cp
+        } else {
+            if endPos < _epos { return endPos }
+            throw DataflowException.SerializationException("DataSegment is nil")
+        }
+    }
 }
 
 public class DataStorage {
