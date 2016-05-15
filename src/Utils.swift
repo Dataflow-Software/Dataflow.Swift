@@ -84,7 +84,7 @@ public typealias BytePtr = UnsafeMutablePointer<Byte>
 public typealias ByteArrayPtr = UnsafeMutableBufferPointer<Byte>
 
 public class ByteArray {
-    private let _mem: BytePtr
+     let _mem: BytePtr
 
     let buf: ByteArrayPtr
     let count: Int
@@ -166,4 +166,16 @@ func blockCopy(src: ByteArrayPtr, srcOffset: Int, dst: ByteArrayPtr, dstOffset: 
 
 func blockCopy(src: UnsafePointer<Byte>, srcOffset: Int, dst: ByteArrayPtr, dstOffset: Int, count: Int) {
     memcpy(dst.baseAddress + dstOffset, src + srcOffset, count)
+}
+
+public class TextUtils {
+    public static let ISODateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ".AsBytes()
+    public static let Base16String = "0123456789ABCDEF".AsBytes()
+    public static let Base64String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".AsBytes()
+    
+    public static let cZero = "0".utf8.first!
+    public static let cDash = "-".utf8.first!
+    public static let cDblQuote = "\"".utf8.first!
+    public static let cEquals = "=".utf8.first!
+    
 }

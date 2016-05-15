@@ -392,17 +392,18 @@ public class StorageReader {
 
 //-- Base class for message writers that produce byte streams.
 public class StorageWriter {
-    var _db: ByteArray?
+    var _db: ByteArray
     var _cp: Int
     var _bp, _epos: Int
     var dts: DataStorage?
+    
+ 
     
     public init(ds: DataStorage, estimate: Int = 0) {
         self.dts = ds
         _cp = 0
         _bp = 0
         _epos = 0
-        _db = nil
         Reset(ds, estimate: estimate)
     }
     
@@ -453,6 +454,423 @@ public class StorageWriter {
             if endPos < _epos { return endPos }
             throw DataflowException.SerializationException("DataSegment is nil")
         }
+    }
+    
+    public func WriteByte(c: Byte) throws {
+        var i = _cp
+        if i < _epos { _db[i] = c }
+        else
+        {
+            i = try Flush(i, sz: 1)
+            _db[i] = c
+        }
+        _cp = i + 1
+    }
+    
+    public func WriteByte(b1: Byte, b2: Byte) throws {
+        var i = _cp
+        if i + 2 > _epos { i = try Flush(i, sz: 2) }
+        _db[i + 0] = b1
+        _db[i + 1] = b2
+        _cp = i + 2
+        
+    }
+    
+    public func WriteUTF8Char(c: UTF8Char) throws {
+        var i = _cp
+        // ascii codes shortcut.
+        if c < 0x80
+        {
+            if i >= _epos { i = try Flush(i, sz: 1) }
+            _db[i] = c
+            _cp = i + 1
+            return
+        }
+        // utf8 expanded codes path.
+        if i + 3 > _epos { i = try Flush(i, sz: 3) }
+        let bt = _db
+        if c < 0x800
+        {
+            bt[i] = (0xC0 | (c >> 6))
+        }
+        else
+        {
+            bt[i] = (0xE0 | ((c >> 12) & 0x0F))
+            i += 1
+            bt[i] = (0x80 | ((c >> 6) & 0x3F))
+        }
+        i += 1
+        bt[i] = (0x80 | (c & 0x3F))
+        _cp = i + 1
+    }
+    
+    public func WriteB32(v: UInt32) throws {
+        var i = _cp
+        if i + 4 > _epos { i = try Flush(i, sz: 4) }
+        _db[i] = Byte(v)
+        _db[i + 1] = Byte(v >> 8)
+        _db[i + 2] = Byte(v >> 16)
+        _db[i + 3] = Byte(v >> 24)
+        _cp = i + 4
+    }
+    
+    public func WriteB32BE(v: UInt32) throws {
+        var i = _cp
+        if i + 4 > _epos { i = try Flush(i, sz: 4) }
+        _db[i + 3] = Byte(v)
+        _db[i + 2] = Byte(v >> 8)
+        _db[i + 1] = Byte(v >> 16)
+        _db[i] = Byte(v >> 24)
+        _cp = i + 4
+    }
+    
+    public func WriteB64(v: UInt64) throws {
+        var i = _cp
+        if i + 8 > _epos { i = try Flush(i, sz: 8) }
+        _db[i] = Byte(v);
+        _db[i + 1] = Byte(v >> 8)
+        _db[i + 2] = Byte(v >> 16)
+        _db[i + 3] = Byte(v >> 24)
+        _db[i + 4] = Byte(v >> 32)
+        _db[i + 5] = Byte(v >> 40)
+        _db[i + 6] = Byte(v >> 48)
+        _db[i + 7] = Byte(v >> 56)
+        _cp = i + 8
+    }
+    
+    public func WriteB64BE(v: UInt64) throws {
+        var i = _cp
+        if i + 8 > _epos { i = try Flush(i, sz: 8) }
+        _db[i + 7] = Byte(v);
+        _db[i + 6] = Byte(v >> 8);
+        _db[i + 5] = Byte(v >> 16)
+        _db[i + 4] = Byte(v >> 24)
+        _db[i + 3] = Byte(v >> 32)
+        _db[i + 2] = Byte(v >> 40)
+        _db[i + 1] = Byte(v >> 48)
+        _db[i + 0] = Byte(v >> 56)
+        _cp = i + 8
+    }
+    
+    public func WriteBytes(i: Int, bt: ByteArray) throws {
+        var pos = 0
+        repeat
+        {
+            let sz = _epos - _cp, lz = i - pos
+            if sz >= lz
+            {
+                _db.blockCopy(bt, srcOffset: pos, dstOffset: _cp, count: lz)
+                _cp += lz
+                return
+            }
+            if sz > 0
+            {
+                _db.blockCopy(bt, srcOffset: pos, dstOffset: _cp, count: sz)
+                pos += sz
+            }
+            _cp = try Flush(_epos, sz: 1)
+        } while (true)
+    }
+    
+    public func WriteBytes(bs: ByteArray, bp: Int, cnt: Int) throws {
+        var cnt = cnt
+        var bp = bp
+        var bt = _db
+        var i = _cp
+        if cnt <= _epos - i
+        {
+            _cp += cnt
+            if (cnt < 12) {
+                while (cnt > 0) {
+                    bt[i] = bs[bp]
+                    i += 1
+                    bp += 1
+                    cnt -= 1
+                }
+            }
+            else {
+                bt.blockCopy(bs, srcOffset: bp, dstOffset: i, count: cnt)
+            }
+        }
+        else
+        {
+            while (cnt > 0)
+            {
+                if i >= _epos {
+                    i = try Flush(i, sz: 1)
+                    bt = _db
+                }
+                bt[i] = bs[bp]
+                i += 1
+                bp += 1
+                cnt -= 1
+            }
+            _cp = i
+        }
+    }
+    
+    public func Write(bt: ByteArray) throws {
+        try WriteBytes(bt, bp: 0, cnt: bt.count)
+    }
+    
+    public func WriteIntPB(i1: Int32, i2: Int32) throws {
+        try WriteIntPB(i1)
+        try WriteIntPB(i2)
+    }
+    
+    public func WriteIntPB(v: Int32) throws {
+        if v >= 0
+        {
+            var i = _cp
+            if i + 5 > _epos { i = try Flush(i, sz: 5) }
+            var x = UInt32(v)
+            repeat
+            {
+                if x < 0x80
+                {
+                    _db[i] = Byte(x);
+                    i += 1
+                    _cp = i
+                    return
+                }
+                _db[i] = Byte(x | 0x80)
+                i += 1
+                x = x >> 7
+            } while (true)
+        }
+        try WriteLongPB(Int64(v))
+    }
+    
+    public func WriteLongPB(v: Int64) throws {
+        var i = _cp
+        if i + 10 > _epos { i = try Flush(i, sz: 10) }
+        var x = UInt64(v)
+        repeat
+        {
+            if x < 0x80
+            {
+                _db[i] = Byte(x)
+                i += 1
+                _cp = i
+                break;
+            }
+            _db[i] = Byte(x | 0x80);
+            i += 1
+            x = x >> 7
+        } while (true)
+    }
+    
+    public func WriteIntAL(i: Int32) throws {
+        
+        var i = i
+        if i == 0
+        {
+            try WriteByte(TextUtils.cZero)
+            return
+        }
+        if (i < 0)
+        {
+            try WriteByte(TextUtils.cDash)
+            i = -i
+        }
+        var sz = 5
+        if i < 10000 {
+            sz = i < 100 ? (i < 10 ? 1 : 2) : (i < 1000 ? 3 : 4)
+        }
+        else {
+            var x = i / 100000
+            while x > 0 {
+                sz += 1
+                x = x / 10
+            }
+        }
+        var ip = _cp + sz
+        if ip > _epos { ip = try Flush(_cp, sz: sz) + sz }
+        _cp = ip
+        var dx = i
+        while i != 0 {
+            let bt = Byte(i - dx) + TextUtils.cZero
+            dx /= 10
+            ip -= 1
+            _db[ip] = bt
+            i = dx
+        }
+    }
+    
+    public func WriteIntAL8(i: Int32) throws {
+        var i = i
+        var ip = _cp + 8
+        if ip > _epos { ip = try Flush(_cp, sz: 8) + 8 }
+        var dx = i
+        while i != 0 {
+            let bt = Byte(i - dx) + TextUtils.cZero;
+            dx /= 10
+            ip -= 1
+            _db[ip] = bt
+            i = dx
+        }
+        ip -= 1
+        while ip >= _cp {
+             _db[ip] = TextUtils.cZero
+            ip -= 1
+        }
+        _cp += 8;
+    }
+    
+    public func WriteLongAL(i: Int64, quote_longs: Bool = true) throws {
+        var i = i
+        // for JSON encoding anything above 2^52 must be string encoded to preserve precision on roundtrip.
+        let num_bits: Int64 = 52, billion: Int64 = 1000000000
+        var sign = false
+        if i < 0
+        {
+            sign = true
+            i = -i
+        }
+        
+        if (i >> 31) != 0
+        {
+            if sign { try WriteByte(TextUtils.cDash) }
+            try WriteIntAL(Int32(i));
+        }
+        else
+        {
+            if quote_longs && (i >> num_bits) != 0 { try WriteByte(TextUtils.cDblQuote) }
+            if sign { try WriteByte(TextUtils.cDash) }
+            
+            var i2 = i / billion
+            i -= i2 * billion
+            if i2 < billion {
+                try WriteIntAL(Int32(i2))
+            }
+            else
+            {
+                let i3 = i2 / billion
+                try WriteIntAL(Int32(i3))
+                i2 -= i3 * billion
+                try WriteIntAL8(Int32(i2))
+            }
+            try WriteIntAL8(Int32(i))
+            if quote_longs && (i >> num_bits) != 0 {
+                try WriteByte(TextUtils.cDblQuote);
+            }
+        }
+    }
+    
+    public func WriteString(s: String) throws {
+        var i = _cp - 1, ep = _epos - 3
+        var bt = _db
+        for c in s.utf8
+        {
+            i += 1
+            if i >= ep {
+                i = try Flush(i, sz: 3)
+                bt = _db
+            }
+            if c < 0x80 { bt[i] = c }
+            else
+            {
+                if c < 0x800 {
+                    bt[i] = Byte(0xC0 | (c >> 6))
+                }
+                else
+                {
+                    bt[i] = Byte(0xE0 | ((c >> 12) & 0x0F))
+                    i += 1
+                    bt[i] = Byte(0x80 | ((c >> 6) & 0x3F))
+                }
+                i += 1
+                bt[i] =  Byte(0x80 | (c & 0x3F))
+            }
+        }
+        _cp = i + 1
+    }
+    
+    public func WriteStringUE(s: String) throws {
+        try WriteStringA(s)
+    }
+    
+    public func WriteStringA(s: String) throws {
+        var i = _cp - 1
+        var bt = _db
+        for c in s.utf8 {
+            i += 1
+            if i < _epos {
+                bt[i] = c
+            }
+            else
+            {
+                i = try Flush(i, sz:1)
+                bt = _db
+                bt[i] = c;
+            }
+        }
+        _cp = i + 1
+    }
+    
+    public func WriteBase64String(dt: ByteArray, pos: Int, size: Int) throws {
+        let bs64 = TextUtils.Base64String
+        var bt = _db
+        
+        var i = _cp, left = size % 3, ep = pos + size - left
+        var rp = pos
+        while rp < ep {
+            if i + 4 > _epos { i = try Flush(i, sz: 4); bt = _db; }
+            let b1: Int = Int((dt[rp] << 16) | (dt[rp + 1] << 8) | dt[rp + 2])
+            bt[i + 0] = bs64[b1 >> 18]
+            bt[i + 1] = bs64[(b1 >> 12) & 63]
+            bt[i + 2] = bs64[(b1 >> 6) & 63]
+            bt[i + 3] = bs64[b1 & 63]
+            i += 4;
+            rp += 3
+            
+        }
+        if left > 0 {
+            if i + 4 > _epos { i = try Flush(i, sz: 4); bt = _db; }
+            bt[i + 3] = TextUtils.cEquals
+            var b1: Int = Int(dt[ep])
+            bt[i] = bs64[b1 >> 2]
+            b1 = (b1 & 3) << 4
+            if left == 1
+            {
+                bt[i + 1] = bs64[b1]
+                bt[i + 2] = TextUtils.cEquals
+            } else {
+                let b2: Int = Int(dt[ep + 1])
+                bt[i + 1] = bs64[(b2 >> 4) | b1]
+                bt[i + 2] = bs64[(b2 & 15) << 2]
+            }
+            i += 4
+        }
+        _cp = i
+    }
+    
+    public func ToByteArray() throws -> ByteArray {
+        let sz = _cp - _bp
+        if sz == 0 { return ByteArray(count: 0) }
+        if let dts = dts where dts.ContentSize > 0 {
+            try Flush()
+            let bts = dts.ToByteArray()
+            dts.Reset()
+            SetSegment(dts.GetNextSegment(1))
+            return bts
+        }
+        if sz == _db.count { return _db }
+        
+        let bt = ByteArray(count: sz)
+        bt.blockCopy(_db, srcOffset: _bp, dstOffset: 0, count: sz)
+        return bt
+    }
+    
+    public func ToString() throws -> String {
+        let sz = _cp - _bp
+        if sz == 0 { return "" }
+        if let dts = dts where dts.ContentSize > 0 {
+            try self.Flush()
+            return dts.ToString()
+        }
+        let str = NSString(bytes: _db._mem, length: sz, encoding: NSUTF8StringEncoding)
+        return str as! String
     }
 }
 

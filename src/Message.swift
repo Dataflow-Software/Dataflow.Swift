@@ -290,23 +290,24 @@ public struct Currency: IntegerLiteralConvertible, Equatable, Comparable {
                     else { return false }
                 }
             }
-            i++
+            i += 1
         }
         
         var cents: Int = 0
         
         if uc != 0 {
-            var k = uc
-            while ++k < i { cents = cents * 10 + Int(s[k] - 48) } // MO: s[k] here is slow, Utils
-            while k - uc < 5 { cents *= 10; k++ }
+            var k = uc + 1
+            while k < i { cents = cents * 10 + Int(s[k] - 48); k += 1 } // MO: s[k] here is slow, Utils
+            while k - uc < 5 { cents *= 10; k += 1 }
             i = uc
         }
         
         var units: Int64 = 0
         uc = sign == 0 ? 0 : 1
         
-        for ; uc < i; uc++ {
-            units = units * 10 + Int64(s[uc] - 48); // MO: s[uc] is slow here, see Utils
+        while uc < i {
+            units = units * 10 + Int64(s[uc] - 48) // MO: s[uc] is slow here, see Utils
+            uc += 1
         }
         
         value = units * Currency.Scale + Int64(cents)
@@ -324,7 +325,7 @@ public struct Currency: IntegerLiteralConvertible, Equatable, Comparable {
             let cent: String = ns.substringFromIndex(sz-4)
             return "\(unit).\(cent)"
         }
-        while sz < 4 { str = "0" + str; sz++ }
+        while sz < 4 { str = "0" + str; sz += 1 }
         return "0." + str
     }
     
@@ -436,8 +437,8 @@ public class Pbs {
     public static func GetUtf8CharSize(bt: [Byte]) -> Int {
         var i = 0, k = 0
         for b in bt {
-            if k > 0 { k--; continue }
-            i++
+            if k > 0 { k -= 1; continue }
+            i += 1
             if b < 0x80 { continue }
             k = b < 0xE0 ? 1 : 2
         }
@@ -720,7 +721,8 @@ public class FieldDescriptor {
         self.MessageType = ds
     }
     
-    public init(pbid: Int, var iwt: Int, name: String, ds: MessageDescriptor? = nil) {
+    public init(pbid: Int, iwt: Int, name: String, ds: MessageDescriptor? = nil) {
+        var iwt = iwt
         self.Name = name;
         self.MessageType = ds
         let wt = WireType(rawValue: iwt)!
@@ -769,7 +771,8 @@ public class MessageDescriptor {
         var pos = 0
         _fields = fs
         for fi in fs.value {
-            fi.Pos = pos++
+            fi.Pos = pos
+            pos += 1
         }
         RecalcIndex()
     }
@@ -791,7 +794,8 @@ public class MessageDescriptor {
             var pos = 0
             self._fields = ArrayRef<FieldDescriptor>(value: fs)
             for fi in self._fields.value {
-                fi.Pos = pos++
+                fi.Pos = pos
+                pos += 1
             }
             RecalcIndex()
         }
@@ -807,8 +811,8 @@ public class MessageDescriptor {
     
     public func New() -> Message { return Factory!.New() }
     
-    public func Find(var id: Int) -> FieldDescriptor? {
-        id = id >> 3
+    public func Find( id: Int) -> FieldDescriptor? {
+        let id = id >> 3
         
         // fast index available
         if _idsIndex.count > 0 { return _idsIndex[id-1] }
@@ -821,7 +825,9 @@ public class MessageDescriptor {
             }
         }
         else {
-            for var r = 0, h = fcount; r <= h; {
+            var r = 0
+            var h  = fcount
+            while r <= h {
                 let i = (r + h) >> 1
                 let item = _fields[i]
                 let c = (item.Id >> 3) - id
@@ -841,7 +847,9 @@ public class MessageDescriptor {
             }
         }
         else {
-            for var r = 0, h = _nameIndex!.count - 1; r <= h; {
+            var r = 0
+            var h = _nameIndex!.count - 1
+            while r <= h {
                 let i = (r + h) >> 1
                 let item = _nameIndex![i]
                 if item.Name == name { return item } // MO: original code used string.CompareOrdinal, needs testing
@@ -906,7 +914,8 @@ public class EnumDescriptor: MessageDescriptor {
         for ds in _fields.value {
             if ds.Id > _maxId { _maxId = ds.Id }
             if ds.Id < _lowId { _lowId = ds.Id }
-            ds.Pos = pos++
+            ds.Pos = pos
+            pos += 1
         }
         RecalcIndex()
         if _maxId - _lowId >= FieldCount*2 { return }
