@@ -269,10 +269,10 @@ public class StorageReader {
         return ui
     }
     
-    public func GetB64() throws -> UInt64 {
+    public func GetB64() throws -> Int64 {
         let lo = try self.GetB32()
         let hi = try self.GetB32()
-        return (UInt64(hi) << 32) + UInt64(lo)
+        return (Int64(hi) << 32) + Int64(lo)
     }
     
     public func GetB64BE() throws -> UInt64 {
@@ -331,7 +331,7 @@ public class StorageReader {
         return Int32(b0)
     }
     
-    public func GetLongBB() throws -> Int64 {
+    public func GetLongPB() throws -> Int64 {
         var i = _cp
         if _epos - _cp < 10 { i = try GetData(10, rqs: 1) }
         var b0 = Int32(_db[i])

@@ -204,6 +204,8 @@ public enum DataflowException: ErrorType {
     case InvalidOperationException
     case OutOfRangeException
     case StorageState
+    case PBufsException(String)
+    case InvalidArgumentException(String)
     
     static let MustOverride = "This function must be overridden"
 }
@@ -450,19 +452,19 @@ public class Pbs {
         return s.lengthOfBytesUsingEncoding(NSUTF8StringEncoding) // MO: needs tesitng
     }
     
-    public static func GetDoubleBits(dv: Double) -> UInt64 {
+    public static func GetDoubleBits(dv: Double) -> Int64 {
         return Unsafe.toInt64Bits(dv)
     }
     
-    public static func SetDoubleBits(lv: UInt64) -> Double {
+    public static func SetDoubleBits(lv: Int64) -> Double {
         return Unsafe.fromInt64Bits(lv, Double.self)
     }
     
-    public static func GetFloatBits(dv: Float) -> UInt32 {
+    public static func GetFloatBits(dv: Float) -> Int32 {
         return Unsafe.toInt32Bits(dv)
     }
     
-    public static func SetFloatBits(lv: UInt32) -> Float {
+    public static func SetFloatBits(lv: Int32) -> Float {
         return Unsafe.fromInt32Bits(lv, Float.self)
     }
 
@@ -600,7 +602,7 @@ public class Message {
     public var ByteSize: Int { get { let sz = _memoized_size; return (sz > 0) ? sz : GetSerializedSize(); } }
     
     public func MergeFrom(data: Message) {
-        MessageCopier().Append(this, data);
+        MessageCopier().Append(self, data);
     }
     
     public func MergeFrom(data: ArrayRef<Byte>)
@@ -981,23 +983,23 @@ public class MessageDescriptor_30: MessageDescriptor {
 public protocol IDataReader
 {
     // value/wire types deserializers.
-    func AsBit32() -> Int
-    func AsBit64() -> Int64
-    func AsBool() -> Bool
-    func AsBytes() -> [Byte]
-    func AsChar() -> UTF16Char
-    func AsCurrency() -> Currency
-    func AsDouble() -> Double
-    func AsEnum(es: EnumDescriptor) -> Int
-    func AsInt() -> Int
-    func AsLong() -> Int64
-    func AsString() -> String
-    func AsFloat() -> Float
+    func AsBit32() throws -> Int32
+    func AsBit64() throws -> Int64
+    func AsBool() throws -> Bool
+    func AsBytes() throws -> ByteArray?
+    func AsChar() throws -> UTF16Char
+    func AsCurrency() throws -> Currency
+    func AsDouble() throws -> Double
+    func AsEnum(es: EnumDescriptor) throws -> Int
+    func AsInt() throws -> Int32
+    func AsLong() throws -> Int64
+    func AsString() throws -> String
+    func AsFloat() throws -> Float
     // special methods are needed due to Protocol Buffers signed int format optimizations.
-    func AsSi32() -> Int32
-    func AsSi64() -> Int64
+    func AsSi32() throws -> Int32
+    func AsSi64() throws -> Int64
     // message types deserializer.
-    func AsMessage(msg: Message, fs: FieldDescriptor)
+    func AsMessage(msg: Message, fs: FieldDescriptor) throws
 }
 
 public class TDataReader {

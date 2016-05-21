@@ -51,28 +51,28 @@ struct Unsafe {
         }
     }
 
-    static func toInt64Bits<T>(value: T) -> UInt64 {
+    static func toInt64Bits<T>(value: T) -> Int64 {
         var v = value
         return withUnsafePointer(&v) {
-            return UnsafePointer<UInt64>($0).memory
+            return UnsafePointer<Int64>($0).memory
         }
     }
 
-    static func fromInt64Bits<T>(bits: UInt64, _: T.Type) -> T {
+    static func fromInt64Bits<T>(bits: Int64, _: T.Type) -> T {
         var v = bits
         return withUnsafePointer(&v) {
             return UnsafePointer<T>($0).memory
         }
     }
     
-    static func toInt32Bits<T>(value: T) -> UInt32 {
+    static func toInt32Bits<T>(value: T) -> Int32 {
         var v = value
         return withUnsafePointer(&v) {
-            return UnsafePointer<UInt32>($0).memory
+            return UnsafePointer<Int32>($0).memory
         }
     }
     
-    static func fromInt32Bits<T>(bits: UInt32, _: T.Type) -> T {
+    static func fromInt32Bits<T>(bits: Int32, _: T.Type) -> T {
         var v = bits
         return withUnsafePointer(&v) {
             return UnsafePointer<T>($0).memory
