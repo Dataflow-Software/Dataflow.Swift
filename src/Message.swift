@@ -9,7 +9,7 @@
 import Foundation
 
 // Protocol Buffers message field kinds, as defined in the Google standard specification.
-public enum FieldKind: Int {
+public enum FieldKind: Int32 {
     case Unknown    = 0
     case Required   = 1
     case Optional   = 2
@@ -19,7 +19,7 @@ public enum FieldKind: Int {
 }
 
  // Lists all built-in types supported for message fields. Includes extensions to the Google specification, like Currency, Date and Decimal.
-public enum DataType: Int {
+public enum DataType: Int32 {
     case Int32      = 0
     case Int64      = 1
     case UInt32     = 2
@@ -48,7 +48,7 @@ public enum DataType: Int {
 
 // lists all supported .NET types for native DataReader/Writer operations.
 // if any existing values are changed, all client proto files should be recompiled.
-public enum WireType: Int
+public enum WireType: Int32
 {
     case None       = 0
     case Int32      = 1
@@ -71,7 +71,7 @@ public enum WireType: Int
     case MapEntry   = 18
     case MaxValue   = 20
     
-    public func WireFormat() -> Int {
+    public func WireFormat() -> Int32 {
         switch self {
             case
             .Int32,
@@ -106,7 +106,7 @@ public enum WireType: Int
 }
 
 // list of stream data formats implemented by streaming RPC channels.
-public enum DataEncoding: Int
+public enum DataEncoding: Int32
 {
     case Unknown = 0
     case Proto = 1
@@ -372,7 +372,7 @@ public func <= (c1:Currency, c2:Currency) -> Bool {
 // Static class for helper methods mostly related to Google Protocol Buffers encoding.
 public class Pbs {
     public static let // PB specification wire data encoding codes
-        iVarInt = 0, iBit64 = 1, iString = 2, iStartGroup = 3, iEndGroup = 4, iBit32 = 5, iBadCode = 8
+    iVarInt: Int32 = 0, iBit64: Int32 = 1, iString: Int32 = 2, iStartGroup: Int32 = 3, iEndGroup: Int32 = 4, iBit32: Int32 = 5, iBadCode: Int32 = 8
     
     public static let // FieldOpts const values must not be changed.
         iNone = 0, iBox = 2, iList = 1, iSpecial = 4, iKvMap = 8, iGoogleType = 16,
@@ -404,10 +404,10 @@ public class Pbs {
     public static func si64(v: Int64) -> Int { return Pbs.i64((v << 1) ^ (v >> 63)) }
     public static func bln(v: Bool) -> Int { return 1 }
     public static func chr(v: UTF8Char) -> Int { return v < 128 ? 1 : 2 }
-    public static func str(s: String) -> Int { return Pbs.szPfx(s.characters.count) }
-    public static func szPfx(sz: Int) -> Int { return sz + Pbs.i32(Int32(sz)) }
-    public static func bts(b: [Byte]) -> Int { return Pbs.szPfx(b.count) }
-    public static func msg(msg: Message) -> Int { return Pbs.szPfx(msg.GetSerializedSize()) }
+    public static func str(s: String) -> Int32 { return Pbs.szPfx(Int32(s.characters.count)) }
+    public static func szPfx(sz: Int32) -> Int32 { return sz + Pbs.i32(sz) }
+    public static func bts(b: ByteArray) -> Int32 { return Pbs.szPfx(Int32(b.count)) }
+    public static func msg(msg: Message) -> Int32 { return Pbs.szPfx(msg.GetSerializedSize()) }
     public static func cur(cy: Currency) -> Int { return Pbs.i64(cy.Value) }
     
     public static func dec2(di: [Int32]) -> Int {
@@ -431,7 +431,7 @@ public class Pbs {
         return (i >> 24) | ((i & 0xFF0000) >> 8) | (i << 24) | ((i & 0xFF00) << 8)
     }
     
-    public static func GetWireId(id: Int, wt: WireType) -> Int {
+    public static func GetWireId(id: Int32, wt: WireType) -> Int32 {
         return (id << 3) | wt.WireFormat();
     }
     
@@ -469,7 +469,7 @@ public class Pbs {
     }
 
     // Returns text name for PB encoding markers.
-    public static func GetWireTypeName(id: Int) -> String {
+    public static func GetWireTypeName(id: Int32) -> String {
         switch id {
         case iVarInt: return "varint";
         case iString: return "string";
@@ -573,14 +573,14 @@ public class Message {
     private static let _desc_ = MessageDescriptor_20(name: "message", options: 0, factory: Message.Empty)
     
     // cache for message size and bitmask
-    var _memoized_size: Int = 0
+    var _memoized_size: Int32 = 0
     
     // methods that are implemented by .proto compiler.
     // returns metadata object that helps runtime libraries in working with message content.
     public func  GetDescriptor() -> MessageDescriptor { return Message._desc_ }
     
     // calculates message size in bytes in the Google Protocol Buffers format.
-    public func GetSerializedSize() -> Int { return 0 }
+    public func GetSerializedSize() -> Int32 { return 0 }
     
     // clears the message contents. All fields are marked as null, and set to the values specified in proto file or to the type defaults.
     public func Clear() { _memoized_size = 0 }
@@ -596,39 +596,41 @@ public class Message {
     public func New() -> Message { return Message.Empty; }
     
     // writes not null message fields to the data writer.
-    public func Put(dw: IDataWriter) { }
+    public func Put(dw: IDataWriter) throws { }
     public func PutField(dw: TDataWriter, fs: FieldDescriptor) { }
     
-    public var ByteSize: Int { get { let sz = _memoized_size; return (sz > 0) ? sz : GetSerializedSize(); } }
+    public var SerializedSize: Int32 { get { let sz = _memoized_size; return (sz > 0) ? sz : GetSerializedSize(); } }
     
-    public func MergeFrom(data: Message) {
-        MessageCopier().Append(self, data);
-    }
-    
-    public func MergeFrom(data: ArrayRef<Byte>)
-    {
-        if data.count == 0 { return }
-        PBStreamReader(data, 0, data.count).Read(self, data.count);
-    }
-    
-    public func MergeFrom(data: String?)
-    {
-        if let str = data where str != "" {
-            JSStreamReader(data, 0, data.count).Read(self)
-        }
-    }
-    
+//    public func MergeFrom(data: Message) {
+//        MessageCopier().Append(self, data);
+//    }
+//    
+//    public func MergeFrom(data: ArrayRef<Byte>)
+//    {
+//        if data.count == 0 { return }
+//        PBStreamReader(data, 0, data.count).Read(self, data.count);
+//    }
+//    
+//    public func MergeFrom(data: String?)
+//    {
+//        if let str = data where str != "" {
+//            JSStreamReader(data, 0, data.count).Read(self)
+//        }
+//    }
+//    
     //-- TODO: public void WriteTo(System.IO.Stream os, DataEncoding encoding)
     
-    public func ToByteArray() -> ArrayRef<Byte> {
-        let bytes = self.GetSerializedSize()
-        let buffer = ArrayRef<Byte>(count: bytes, repeatedValue: 0)
-         Put(PBStreamWriter(buffer, 0, bytes))
+    public func ToByteArray() throws -> ByteArray {
+        let bytes = Int(self.GetSerializedSize())
+        let buffer = ByteArray(count: bytes)
+        let writer = PBDataWriter(bts: buffer, pos: 0, count: bytes)
+        try Put(writer)
         return buffer
     }
     
-    public func ToByteArray(bt: ArrayRef<Byte>, offset: Int, count: Int) -> Void {
-        Put(PBStreamWriter(bt, offset, count))
+    public func ToByteArray(bt: ByteArray, offset: Int, count: Int) throws -> Void {
+        let writer = PBDataWriter(bts: bt, pos: offset, count: count)
+        try Put(writer)
     }
     
     public func ToString() -> String {
@@ -636,48 +638,49 @@ public class Message {
     }
     
     public func ToString(decorate: Bool) -> String {
-        var dts = DataStorage()
-       
-        var jsw = JSStreamWriter(dts, decorate)
-        defer {
-            jsw.Dispose()
-        }
-    
-        jsw.Append(self)
-        jsw.Flush()
-        return jsw.ToString()
+        return ""
+//        var dts = DataStorage()
+//       
+//        var jsw = JSStreamWriter(dts, decorate)
+//        defer {
+//            jsw.Dispose()
+//        }
+//    
+//        jsw.Append(self)
+//        jsw.Flush()
+//        return jsw.ToString()
     }
     
     public func Equals(message: Message) -> Bool {
         return false;
     }
     
-    func GetMapEntry(map: ArrayRef<MapEntry>, key: Int64, ds: MessageDescriptor?) throws -> MapEntry {
-        for kv in map {
-            if kv.lk == key { return kv }
-            if let ds = ds {
-                return MapEntry(ds, key)
-            }
-            throw DataflowException.KeyNotFoundException(String(key))
-        }
-    }
-    
-    func GetMapEntry(map: ArrayRef<MapEntry>, key: String, ds: MessageDescriptor?) throws -> MapEntry {
-        for kv in map {
-            if kv.sk == key { return kv }
-            if let ds = ds {
-                return MapEntry(ds, key)
-            }
-            throw DataflowException.KeyNotFoundException(key)
-        }
-    }
+//    func GetMapEntry(map: ArrayRef<MapEntry>, key: Int64, ds: MessageDescriptor?) throws -> MapEntry {
+//        for kv in map {
+//            if kv.lk == key { return kv }
+//            if let ds = ds {
+//                return MapEntry(ds, key)
+//            }
+//            throw DataflowException.KeyNotFoundException(String(key))
+//        }
+//    }
+//    
+//    func GetMapEntry(map: ArrayRef<MapEntry>, key: String, ds: MessageDescriptor?) throws -> MapEntry {
+//        for kv in map {
+//            if kv.sk == key { return kv }
+//            if let ds = ds {
+//                return MapEntry(ds, key)
+//            }
+//            throw DataflowException.KeyNotFoundException(key)
+//        }
+//    }
     
     static func _init_ds_(ds: MessageDescriptor, factory: Message, fs: FieldDescriptor...) -> MessageDescriptor {
-        return ds.Init(factory, fs)
+       //-- return ds.Init(factory, fs)
     }
     
-    static func _map_ds_(key: Int, val: Int, vs: MessageDescriptor) -> MessageDescriptor {
-        return MessageDescriptor_30("map", key, val, vs)
+    static func _map_ds_(key: Int32, val: Int32, vs: MessageDescriptor) -> MessageDescriptor {
+        return MessageDescriptor_30(name: "map", key: key, value: val, valMst: vs)
     }
 
     public init() {
@@ -693,11 +696,11 @@ public class Nothing : Message
 }
 
 public class FieldDescriptor {
-    public let iRepeated = 64, iRequired = 128, iPacked = 256, iMap = 512, iSignFmt = 1024, iBoxed = 2048
-    private var _options = 0
+    public let iRepeated: Int32 = 64, iRequired: Int32 = 128, iPacked: Int32 = 256, iMap: Int32 = 512, iSignFmt: Int32 = 1024, iBoxed: Int32 = 2048
+    private var _options: Int32 = 0
     
-    public var DataSize: Int { get { return _options >> 16 } set { _options = (_options & 0xFFFF) | newValue << 16 } }
-    public var DataType: WireType { get { return WireType(rawValue: (_options & 63))! } } //TODO: not sure about WireType conversion here
+    public var DataSize: Int32 { get { return _options >> 16 } set { _options = (_options & 0xFFFF) | newValue << 16 } }
+    public var DataType: WireType { get { return WireType(rawValue: Int32(_options & 63))! } } //TODO: not sure about WireType conversion here
     public var IsBoxed: Bool { get { return (_options & iBoxed) != 0 } }
     public var IsPacked: Bool { get { return (_options & iPacked) != 0 } }
     public var IsRepeated: Bool { get { return (_options & iRepeated) != 0 } }
@@ -705,25 +708,25 @@ public class FieldDescriptor {
     public var IsSignFormat: Bool { get { return (_options & iSignFmt) != 0 } }
     public var StringEncoding: Bool { get { return (Id & 0x7) == Pbs.iString } }
     
-    public var Id: Int
+    public var Id: Int32
     public var Name: String
     public var Pos: Int = 0
     public var MessageType: MessageDescriptor?
     
-    public init(name: String, id: Int, os: Int) {
+    public init(name: String, id: Int32, os: Int32) {
         self.Name = name
         self.Id = id
         self._options = os
     }
     
-    public init(name: String, id: Int, os: Int, ds: MessageDescriptor) {
+    public init(name: String, id: Int32, os: Int32, ds: MessageDescriptor) {
         self.Name = name
         self.Id = id
         self._options = os
         self.MessageType = ds
     }
     
-    public init(pbid: Int, iwt: Int, name: String, ds: MessageDescriptor? = nil) {
+    public init(pbid: Int32, iwt: Int32, name: String, ds: MessageDescriptor? = nil) {
         var iwt = iwt
         self.Name = name;
         self.MessageType = ds
@@ -738,7 +741,7 @@ public class FieldDescriptor {
 
 public class EnumFieldDescriptor : FieldDescriptor
 {
-    public init(name: String, value: Int) {
+    public init(name: String, value: Int32) {
         super.init(name: name, id: value, os: 0)
     }
 }
@@ -757,7 +760,7 @@ public class MessageDescriptor {
     public var IsGoogleType: Bool { get { return (_options & Pbs.iGoogleType) != 0 } }
     public var Name: String
     public var Fields: ArrayRef<FieldDescriptor> { get { return _fields } }
-    public var FieldCount: Int { get { return _fields.count } }
+    public var FieldCount: Int32 { get { return Int32(_fields.count) } }
     public var Factory: Message? { get { return _factory; } }
     public var HasOptions: Bool { get { return _options != 0 } }
     
@@ -803,7 +806,7 @@ public class MessageDescriptor {
         }
     }
     
-    public func AddField(name: String, type: WireType, desc: MessageDescriptor, options: Int = 0) {
+    public func AddField(name: String, type: WireType, desc: MessageDescriptor, options: Int32 = 0) {
         let pos = _fields.count;
         let fs = FieldDescriptor(name: name, id: Pbs.GetWireId(pos+1, wt: type), os: type.rawValue | options, ds: desc)
         fs.Pos = pos
@@ -813,7 +816,7 @@ public class MessageDescriptor {
     
     public func New() -> Message { return Factory!.New() }
     
-    public func Find( id: Int) -> FieldDescriptor? {
+    public func Find(id: Int32) -> FieldDescriptor? {
         let id = id >> 3
         
         // fast index available
@@ -877,7 +880,7 @@ public class MessageDescriptor {
         if _factory == nil { return }
 
         
-        var maxId = 0;
+        var maxId: Int32 = 0;
         for fi in _fields.value
         {
             if fi.Id > maxId { maxId = fi.Id }
@@ -888,7 +891,7 @@ public class MessageDescriptor {
             _idsIndex = _fields
         }
         else if maxId < FieldCount * 2 {
-            var indexes = Array<FieldDescriptor?>(count: maxId, repeatedValue: nil)
+            var indexes = Array<FieldDescriptor?>(count: Int(maxId), repeatedValue: nil)
             
             for fi in _fields.value {
                 indexes[(fi.Id >> 3) - 1] = fi
@@ -901,7 +904,7 @@ public class MessageDescriptor {
 
 public class EnumDescriptor: MessageDescriptor {
     private var _map: ArrayRef<EnumFieldDescriptor>?
-    private var _lowId: Int, _maxId: Int
+    private var _lowId: Int32, _maxId: Int32
     
     init(name: String, fs: EnumFieldDescriptor...) {
         super.init(name: name, options: 0, factory: nil, fs: ArrayRef<FieldDescriptor>())
@@ -911,8 +914,8 @@ public class EnumDescriptor: MessageDescriptor {
         if fs.count == 0 { return }
         
         var pos = 0
-        _lowId = Int.max
-        _maxId = Int.min
+        _lowId = Int32.max
+        _maxId = Int32.min
         for ds in _fields.value {
             if ds.Id > _maxId { _maxId = ds.Id }
             if ds.Id < _lowId { _lowId = ds.Id }
@@ -933,7 +936,7 @@ public class EnumDescriptor: MessageDescriptor {
         self.init(name: "")
     }
     
-    public func GetById(id: Int) -> FieldDescriptor? {
+    public func GetById(id: Int32) -> FieldDescriptor? {
         if let map = _map {
             if id < _lowId || id > _maxId { return nil }
             return map[id - _lowId]
@@ -959,7 +962,7 @@ public class MessageDescriptor_30: MessageDescriptor {
         _options = options
     }
     
-    init(name: String, key: Int, value: Int, valMst: MessageDescriptor? = nil) {
+    init(name: String, key: Int32, value: Int32, valMst: MessageDescriptor? = nil) {
         let fs = ArrayRef<FieldDescriptor>()
         
         if key == WireType.String.rawValue {

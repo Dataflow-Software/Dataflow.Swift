@@ -11,7 +11,7 @@ import Foundation
 public class PBDataReader {
     let MaxNestLevel = 80, MaxBlobSize = 0x800000 // +8M
     var _storage: StorageReader
-    var _wirefmt: Int           // wire format for current field
+    var _wirefmt: Int32           // wire format for current field
     var _level: Int, _fsz: Int    // current field byte size and nesting level
     var _data: Int64;             // current field value for non-RLE types
     
@@ -45,7 +45,7 @@ public class PBDataReader {
         }
     }
     
-    func FormatError(wt: Int) throws -> Int64 {
+    func FormatError(wt: Int32) throws -> Int64 {
         if wt >= 0 {
             throw DataflowException.PBufsException("type mismatch: expected " + Pbs.GetWireTypeName(wt) + ", actual " + Pbs.GetWireTypeName(_wirefmt))
         }
@@ -56,7 +56,7 @@ public class PBDataReader {
         return _wirefmt == Pbs.iVarInt ? _data : try FormatError(Pbs.iVarInt);
     }
     
-    func GetBits64(expected: Int) throws -> Int64 {
+    func GetBits64(expected: Int32) throws -> Int64 {
         return _wirefmt == expected ? _data : try FormatError(expected);
     }
     
@@ -65,8 +65,8 @@ public class PBDataReader {
         let prev = try PushLimit()
         if _storage.Limit > 0 {
             // read next PB value from the stream.
-            let id = Int(try _storage.GetIntPB())
-            _wirefmt = Int(id & 0x7)
+            let id = try _storage.GetIntPB()
+            _wirefmt = id & 0x7
             switch _wirefmt {
             case Pbs.iVarInt:
                 _data = try _storage.GetLongPB()
@@ -246,6 +246,57 @@ extension PBDataReader: IDataReader {
         let i = try GetVarInt()
         return (i >> 1) ^ -(i & 1)
     }
+    
+}
+
+public class PBDataWriter {
+    let _storage: StorageWriter
+    
+    public var Storage: StorageWriter { get { return _storage } }
+    
+    public init(sw: StorageWriter) {
+        _storage = sw
+    }
+    
+    public init(bts: ByteArray, pos: Int, count: Int) {
+        _storage = StorageWriter(db: bts, pos: pos, count: count)
+    }
+    
+    public func AppendMessage(message: Message, ci: MessageDescriptor) throws -> PBDataWriter {
+        // force recalc on _memoized_size to guarantee up-to-date value.
+        message.GetSerializedSize()
+        // serialize message fields.
+        try message.Put(self)
+        return self
+    }
+    
+    public func WriteInt(fs: FieldDescriptor, i: Int32) throws {
+       try _storage.WriteIntPB(fs.Id, i2: i)
+    }
+    
+    public func WriteLong(fs: FieldDescriptor, l: Int64) throws {
+        try _storage.WriteIntPB(fs.Id)
+        try _storage.WriteLongPB(l)
+    }
+    
+    public func WriteMessage(fs: FieldDescriptor, msg: Message?) throws {
+        if let msg = msg {
+            try _storage.WriteIntPB(fs.Id, i2: msg.SerializedSize)
+            try msg.Put(self)
+        }
+    }
+    
+    public func WriteString(fs: FieldDescriptor, s: String) throws {
+        try _storage.WriteIntPB(fs.Id, i2: Int32(Pbs.GetUtf8ByteSize(s)))
+        try _storage.WriteString(s)
+    }
+    
+    
+    
+    
+}
+
+extension PBDataWriter: IDataWriter {
     
 }
 
