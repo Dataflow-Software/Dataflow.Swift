@@ -71,7 +71,7 @@ public enum WireType: Int32
     case MapEntry   = 18
     case MaxValue   = 20
     
-    public func WireFormat() -> Int32 {
+    public func WireFormat() -> Swift.Int32 {
         switch self {
             case
             .Int32,
@@ -104,6 +104,7 @@ public enum WireType: Int32
         }
     }
 }
+
 
 // list of stream data formats implemented by streaming RPC channels.
 public enum DataEncoding: Int32
@@ -675,8 +676,8 @@ public class Message {
 //        }
 //    }
     
-    static func _init_ds_(ds: MessageDescriptor, factory: Message, fs: FieldDescriptor...) -> MessageDescriptor {
-       //-- return ds.Init(factory, fs)
+    static func _init_ds_(ds: MessageDescriptor, factory: Message, fs: FieldDescriptor...) throws -> MessageDescriptor {
+       return try ds.Setup(factory, fs: fs)
     }
     
     static func _map_ds_(key: Int32, val: Int32, vs: MessageDescriptor) -> MessageDescriptor {
@@ -705,8 +706,7 @@ public class FieldDescriptor {
     public var IsPacked: Bool { get { return (_options & iPacked) != 0 } }
     public var IsRepeated: Bool { get { return (_options & iRepeated) != 0 } }
     public var IsRequired: Bool { get { return (_options & iRequired) != 0 } }
-    public var IsSignFormat: Bool { get { return (_options & iSignFmt) != 0 } }
-    public var StringEncoding: Bool { get { return (Id & 0x7) == Pbs.iString } }
+    public var IsSignedInt: Bool { get { return (_options & iSignFmt) != 0 } }
     
     public var Id: Int32
     public var Name: String
@@ -786,7 +786,7 @@ public class MessageDescriptor {
         self.init(name: name, options: options, factory: factory, fs: ArrayRef<FieldDescriptor>())
     }
     
-    public func Setup(factory: Message, fs: FieldDescriptor...) throws -> MessageDescriptor {
+    public func Setup(factory: Message, fs: [FieldDescriptor]) throws -> MessageDescriptor {
         if _factory != nil {
             throw DataflowException.GenericException("Messaged already initialized")
         }
@@ -804,6 +804,7 @@ public class MessageDescriptor {
             }
             RecalcIndex()
         }
+        return self
     }
     
     public func AddField(name: String, type: WireType, desc: MessageDescriptor, options: Int32 = 0) {
@@ -904,7 +905,7 @@ public class MessageDescriptor {
 
 public class EnumDescriptor: MessageDescriptor {
     private var _map: ArrayRef<EnumFieldDescriptor>?
-    private var _lowId: Int32, _maxId: Int32
+    private var _lowId: Int32 = 0, _maxId: Int32 = 0
     
     init(name: String, fs: EnumFieldDescriptor...) {
         super.init(name: name, options: 0, factory: nil, fs: ArrayRef<FieldDescriptor>())
@@ -958,8 +959,7 @@ public class MessageDescriptor_30: MessageDescriptor {
     private static let _key_string = FieldDescriptor(pbid: 1, iwt: WireType.String.rawValue, name: MessageDescriptor_30.map_key_name)
     
     init(name: String, options: Int = Pbs.iNone) {
-        Name = name
-        _options = options
+        super.init(name: name, options: options, factory: nil, fs: ArrayRef<FieldDescriptor>())
     }
     
     init(name: String, key: Int32, value: Int32, valMst: MessageDescriptor? = nil) {
@@ -993,7 +993,7 @@ public protocol IDataReader
     func AsChar() throws -> UTF16Char
     func AsCurrency() throws -> Currency
     func AsDouble() throws -> Double
-    func AsEnum(es: EnumDescriptor) throws -> Int
+    func AsEnum(es: EnumDescriptor) throws -> Int32
     func AsInt() throws -> Int32
     func AsLong() throws -> Int64
     func AsString() throws -> String
@@ -1014,7 +1014,7 @@ public class TDataReader {
     func AsChar() -> UTF16Char { preconditionFailure(DataflowException.MustOverride) }
     func AsCurrency() -> Currency { preconditionFailure(DataflowException.MustOverride) }
     func AsDouble() -> Double { preconditionFailure(DataflowException.MustOverride) }
-    func AsEnum(es: EnumDescriptor) -> Int { preconditionFailure(DataflowException.MustOverride) }
+    func AsEnum(es: EnumDescriptor) -> Int32 { preconditionFailure(DataflowException.MustOverride) }
     func AsInt() -> Int { preconditionFailure(DataflowException.MustOverride) }
     func AsLong() -> Int64 { preconditionFailure(DataflowException.MustOverride) }
     func AsString() -> String { preconditionFailure(DataflowException.MustOverride) }
@@ -1028,30 +1028,31 @@ public class TDataReader {
 
 public protocol IDataWriter
 {
+    func IsNull(fs: FieldDescriptor)
     // value types serializers.
-    func AsBytes(fs: FieldDescriptor, bt: [Byte])
-    func AsCurrency(fs: FieldDescriptor, cy: Currency)
-    func AsDouble(fs: FieldDescriptor, d: Double)
-    func AsInt(fs: FieldDescriptor, i: Int32)
-    func AsLong(fs: FieldDescriptor, l: Int64)
-    func AsString(fs: FieldDescriptor, s: String)
-    func AsBool(fs: FieldDescriptor, b: Bool)
-    func AsChar(fs: FieldDescriptor, ch: UTF16Char)
-    func AsBit32(fs: FieldDescriptor, i: Int32)
-    func AsBit64(fs: FieldDescriptor, l: Int64)
-    func AsEnum(fs: FieldDescriptor, en: Int64)
-    func AsFloat(fs: FieldDescriptor, f: Float)
-    func AsSi32(fs: FieldDescriptor, i: Int32)
-    func AsSi64(fs: FieldDescriptor, l: Int64)
+    func AsBytes(fs: FieldDescriptor, bt: ByteArray) throws
+    func AsCurrency(fs: FieldDescriptor, cy: Currency) throws
+    func AsDouble(fs: FieldDescriptor, d: Double) throws
+    func AsInt(fs: FieldDescriptor, i: Int32) throws
+    func AsLong(fs: FieldDescriptor, l: Int64) throws
+    func AsString(fs: FieldDescriptor, s: String) throws
+    func AsBool(fs: FieldDescriptor, b: Bool) throws
+    func AsChar(fs: FieldDescriptor, ch: UTF16Char) throws
+    func AsBit32(fs: FieldDescriptor, i: Int32) throws
+    func AsBit64(fs: FieldDescriptor, l: Int64) throws
+    func AsEnum(fs: FieldDescriptor, en: Int32) throws
+    func AsFloat(fs: FieldDescriptor, f: Float) throws
+    func AsSi32(fs: FieldDescriptor, i: Int32) throws
+    func AsSi64(fs: FieldDescriptor, l: Int64) throws
     // repeated fields serializer, "expands" inside based on field data type.
-    func AsRepeated(fs: FieldDescriptor, data: [AnyObject])
+    func AsRepeated(fs: FieldDescriptor, data: AnyObject) throws
     // embedded messages serializer.
-    func AsMessage(fs: FieldDescriptor, msg: Message)
+    func AsMessage(fs: FieldDescriptor, msg: Message?) throws
 }
 
 public class TDataWriter {
     // value types serializers.
-    func AsBytes(fs: FieldDescriptor, bt: [Byte]) { preconditionFailure(DataflowException.MustOverride) }
+    func AsBytes(fs: FieldDescriptor, bt: ByteArray) { preconditionFailure(DataflowException.MustOverride) }
     func AsCurrency(fs: FieldDescriptor, cy: Currency) { preconditionFailure(DataflowException.MustOverride) }
     func AsDouble(fs: FieldDescriptor, d: Double) { preconditionFailure(DataflowException.MustOverride) }
     func AsInt(fs: FieldDescriptor, i: Int32) { preconditionFailure(DataflowException.MustOverride) }
@@ -1061,14 +1062,14 @@ public class TDataWriter {
     func AsChar(fs: FieldDescriptor, ch: UTF16Char) { preconditionFailure(DataflowException.MustOverride) }
     func AsBit32(fs: FieldDescriptor, i: Int32) { preconditionFailure(DataflowException.MustOverride) }
     func AsBit64(fs: FieldDescriptor, l: Int64) { preconditionFailure(DataflowException.MustOverride) }
-    func AsEnum(fs: FieldDescriptor, en: Int64) { preconditionFailure(DataflowException.MustOverride) }
+    func AsEnum(fs: FieldDescriptor, en: Int32) { preconditionFailure(DataflowException.MustOverride) }
     func AsFloat(fs: FieldDescriptor, f: Float) { preconditionFailure(DataflowException.MustOverride) }
     func AsSi32(fs: FieldDescriptor, i: Int32) { preconditionFailure(DataflowException.MustOverride) }
     func AsSi64(fs: FieldDescriptor, l: Int64) { preconditionFailure(DataflowException.MustOverride) }
     // repeated fields serializer, "expands" inside based on field data type.
     func AsRepeated(fs: FieldDescriptor, data: [AnyObject]) { preconditionFailure(DataflowException.MustOverride) }
     // embedded messages serializer.
-    func AsMessage(fs: FieldDescriptor, msg: Message) { preconditionFailure(DataflowException.MustOverride) }
+    func AsMessage(fs: FieldDescriptor, msg: Message?) { preconditionFailure(DataflowException.MustOverride) }
 }
 
 // Base classes for PB/JSON/... (de)serializers.

@@ -291,7 +291,7 @@ public class StorageReader {
         var i = _cp
         if _epos - _cp < 10 { i = try GetData(5, rqs: 1) }
         var b0 = UInt32(_db[i])
-        if 0 < 0x80
+        if b0 < 0x80
         {
             _limit = _limit - 1
             _cp = i + 1;
@@ -393,17 +393,16 @@ public class StorageReader {
 //-- Base class for message writers that produce byte streams.
 public class StorageWriter {
     var _db: ByteArray
-    var _cp: Int
-    var _bp, _epos: Int
+    var _cp: Int = 0
+    var _bp: Int = 0, _epos: Int = 0
     var dts: DataStorage?
-    
- 
     
     public init(ds: DataStorage, estimate: Int = 0) {
         self.dts = ds
         _cp = 0
         _bp = 0
         _epos = 0
+        _db = ByteArray(count: 0) // TODO: otherwise doesn't compile
         Reset(ds, estimate: estimate)
     }
     
@@ -476,13 +475,15 @@ public class StorageWriter {
         
     }
     
-    public func WriteUTF8Char(c: UTF8Char) throws {
+    public func WriteUTF8Char(c: UTF16Char) throws {
+        // TODO: called UTF8 but takes UTF16 as a parameter
+        // investigate
         var i = _cp
         // ascii codes shortcut.
         if c < 0x80
         {
             if i >= _epos { i = try Flush(i, sz: 1) }
-            _db[i] = c
+            _db[i] = UInt8(c)
             _cp = i + 1
             return
         }
@@ -491,16 +492,16 @@ public class StorageWriter {
         let bt = _db
         if c < 0x800
         {
-            bt[i] = (0xC0 | (c >> 6))
+            bt[i] = UInt8(0xC0 | (c >> 6))
         }
         else
         {
-            bt[i] = (0xE0 | ((c >> 12) & 0x0F))
+            bt[i] = UInt8(0xE0 | ((c >> 12) & 0x0F))
             i += 1
-            bt[i] = (0x80 | ((c >> 6) & 0x3F))
+            bt[i] = UInt8(0x80 | ((c >> 6) & 0x3F))
         }
         i += 1
-        bt[i] = (0x80 | (c & 0x3F))
+        bt[i] = (0x80 | UInt8(c & 0x3F))
         _cp = i + 1
     }
     
@@ -760,14 +761,14 @@ public class StorageWriter {
     public func WriteString(s: String) throws {
         var i = _cp - 1, ep = _epos - 3
         var bt = _db
-        for c in s.utf8
+        for c in s.utf16
         {
             i += 1
             if i >= ep {
                 i = try Flush(i, sz: 3)
                 bt = _db
             }
-            if c < 0x80 { bt[i] = c }
+            if c < 0x80 { bt[i] = UInt8(c) }
             else
             {
                 if c < 0x800 {
@@ -920,9 +921,12 @@ public class DataStorage {
         }
 
         // add initial block if needed
-        guard let last = _last else {
+        if _last == nil {
             _last = SegmentCache.instance.Get()
             _list = _last
+        }
+        guard let last = _last else {
+            return
         }
         
         var bz = last.FreeSpace
@@ -1162,21 +1166,20 @@ public class DataStorage {
 
 class DataSegment {
     let _mem: ByteArray
-    private let _cache: SegmentCache?
+    private let _cache: SegmentCache? = nil
     
-    var Next: DataSegment?
+    var Next: DataSegment? = nil
     
     var Count: Int = 0
     var Offset: Int = 0
     
-    var Size: Int
+    var Size: Int = 0
     var FreeSpace: Int { get { return Size - Count } }
-    var Buffer: ByteArray { get { _mem } }
+    var Buffer: ByteArray { get { return _mem } }
     
     init(cache: SegmentCache) {
         _mem = ByteArray(count: cache.iBlockSize)
         self.Size = _mem.count
-        _cache = cache
     }
     
     init(size: Int) {
@@ -1195,6 +1198,7 @@ class DataSegment {
         if let c = _cache { c.Release(self) }
         Count = 0
         Offset = 0
+        return nil
     }
     
     func Cut(pos: Int, sz: Int) -> Int {
@@ -1216,7 +1220,7 @@ class DataSegment {
 }
 
 public class SegmentCache {
-    public let iBlockSize = 0x8000
+    public var iBlockSize = 0x8000
     public static var instance = SegmentCache()
     
     private var _lock = SpinLock()
