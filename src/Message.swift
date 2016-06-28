@@ -207,6 +207,7 @@ public enum DataflowException: ErrorType {
     case StorageState
     case PBufsException(String)
     case InvalidArgumentException(String)
+    case JsonException(String)
     
     static let MustOverride = "This function must be overridden"
 }
